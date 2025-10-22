@@ -11,29 +11,40 @@ Endpoints:
 '''
 import asyncio
 from fastapi import FastAPI
-import JSON
+import json
 # from typing import Union
 from docker_controller import DockerController
+from pydantic import BaseModel
 
 app = FastAPI()
 dc = DockerController()
 
-port = 5000
 
-agents = {}
+class AddAgentReq(BaseModel):
+    gh_url: str
 
 
-@app.get("/add_agent")
-def add_agent(github_repo_url: str) -> str:
-    task = asyncio.create_task(dc.create_new_container())
+@app.post("/add_agent")
+async def add_agent(req: AddAgentReq) -> str:
+    task = asyncio.create_task(dc.create_new_container(req.gh_url))
 
-    # agent_name = await get_agent_name()
-    # agents[agent_name] = this_port
     await task
 
-    return JSON.stringify({"port": task.result().port})
+    return json.dumps({"port": task.result().port})
 
 
-@app.get("/get_all_agents")
-def get_all_agengts() -> str:
-    return JSON.stringify(agents)
+@app.post("/get_all_agents")
+def get_all_agents() -> str:
+    return json.dumps({"unimplemented": "unimplemented"})
+
+
+@app.post("/kill_agent")
+def kill_agent() -> str:
+    dc.kill_conatiner("")
+    return json.dumps({"unimplemented": "unimplemented"})
+
+
+@app.post("/restart_agent")
+def restart_agent() -> str:
+    dc.restart_conatiner("")
+    return json.dumps({"unimplemented": "unimplemented"})
