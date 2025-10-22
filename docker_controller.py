@@ -2,11 +2,14 @@ from enum import Enum
 from dataclasses import dataclass
 from time import sleep
 from port_controller import PortController
+from gh_controller import GHController, GH_SC
 from socket import socket
 import asyncio
 
 
 class DC_SC(Enum):
+    BAD_GH_TEAM_NAME = -3
+    BAD_GH_TEAM_MEMBER = -2
     BAD_GH_URL = -1
     OK = 1
 
@@ -22,12 +25,15 @@ class ActiveContainer:
 class ContainerCreation:
     status: DC_SC
     port: int = -1
+    team_name: str = ""
+    team_members: str = ""
 
 
 class DockerController:
     def __init__(self):
         self.active_containers: {str: ActiveContainer} = {}
         self.pc = PortController()
+        self.gh = GHController()
 
     def __iter__(self):
         return self
@@ -40,6 +46,16 @@ class DockerController:
 
         async with asyncio.TaskGroup() as tg:
             port_task = tg.create_task(self.pc.get_available_TCP_port())
+            team_name_task = tg.create_task(self.gh.get_gh_team_name(gh_url))
+            team_member_task = tg.create_task(
+                self.gh.get_gh_team_member_names(gh_url))
+
+        # If either gh task fails, return bad container?
+        # Yes, I want to know which team and who is on it at all times
+        if (team_name_task.result().status == GH_SC.BAD_URL
+                or team_member_task.result().status == GH_SC.BAD_URL):
+            return ContainerCreation(status=DC_SC.BAD_GH_URL)
+
         # Get team name
         # Get team member names
         # Get available TCP port
@@ -54,7 +70,9 @@ class DockerController:
 
         return ContainerCreation(
             status=DC_SC.OK,
-            port=port_task.result().port
+            port=port_task.result().port,
+            team_name=team_name_task.result().response,
+            team_members=team_member_task.result().response
         )
 
     def get_active_containers(self) -> {ActiveContainer}:
