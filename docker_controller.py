@@ -41,8 +41,14 @@ class DockerController:
     async def create_new_container(self, gh_url: str) -> ContainerCreation:
         """Creates a new container."""
 
-        sleep(1)
-        print("[DockerController.create_new_container] UNIMPLEMENTED")
+        print("[DockerController.create_new_container] PARTIAL IMPLEMENT")
+
+        # Get team name
+        # Get team member names
+        # Get available TCP port
+        # THEN
+        # Create Docker Container
+        # Return ContainerCreation
 
         async with asyncio.TaskGroup() as tg:
             port_task = tg.create_task(self.pc.get_available_TCP_port())
@@ -52,21 +58,18 @@ class DockerController:
 
         # If either gh task fails, return bad container?
         # Yes, I want to know which team and who is on it at all times
-        if (team_name_task.result().status == GH_SC.BAD_URL
-                or team_member_task.result().status == GH_SC.BAD_URL):
+        # TODO: Handle GH errors
+        if (team_name_task.result().status != GH_SC.OK
+                or team_member_task.result().status != GH_SC.OK):
             return ContainerCreation(status=DC_SC.BAD_GH_URL)
 
-        # Get team name
-        # Get team member names
-        # Get available TCP port
-        # THEN
-        # Create Docker Container
-        # Return ContainerCreation
-        self.active_containers.update({'test': ActiveContainer(
-            socket=port_task.result().socket,
-            port_number=port_task.result().port,
-            container_name='test'
-        )})
+        self.active_containers.update({
+            team_name_task.result().response:
+            ActiveContainer(
+                socket=port_task.result().socket,
+                port_number=port_task.result().port,
+                container_name='test'
+            )})
 
         return ContainerCreation(
             status=DC_SC.OK,
