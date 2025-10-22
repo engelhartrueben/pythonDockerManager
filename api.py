@@ -13,7 +13,7 @@ import asyncio
 from fastapi import FastAPI
 import json
 # from typing import Union
-from docker_controller import DockerController
+from docker_controller import DockerController, DC_SC
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -30,7 +30,10 @@ async def add_agent(req: AddAgentReq) -> str:
 
     await task
 
-    return json.dumps({"port": task.result().port})
+    if task.result().status != DC_SC.OK:
+        return json.dumps({"status": "bad"})
+
+    return json.dumps({"port": task.result().port, "status": "ok"})
 
 
 @app.post("/get_all_agents")

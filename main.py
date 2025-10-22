@@ -9,7 +9,6 @@ async def main():
     task1 = await dc.create_new_container(
         "https://github.com/engelhartrueben/test_repo"
     )
-    # to: https://raw.githubusercontent.com/engelhartrueben/test_repo/refs/heads/main/teammembers
 
     print(f"Assigned port: {task1.port}")
     print(f"Team name: {task1.team_name}")
@@ -21,5 +20,7 @@ def clean_up():
 
 
 if __name__ == "__main__":
+    print("[WARN] This script is used only for testing")
+    print("[WARN] Run 'fastapi dev api.py' for full application")
     atexit.register(clean_up)
     asyncio.run(main())
