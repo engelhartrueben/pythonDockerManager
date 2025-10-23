@@ -1,13 +1,15 @@
 from enum import Enum
 from dataclasses import dataclass
 from time import sleep
-from port_controller import PortController
+from port_controller import PortController, PortAssignment
 from gh_controller import GHController, GH_SC
-from socket import socket
 import asyncio
+import docker
 
 
 class DC_SC(Enum):
+    FAILED_TO_START_DOCKER_C = -5
+    FAILED_TO_KILL_DOCKER_C = -4
     BAD_GH_TEAM_NAME = -3
     BAD_GH_TEAM_MEMBER = -2
     BAD_GH_URL = -1
@@ -16,9 +18,8 @@ class DC_SC(Enum):
 
 @dataclass
 class ActiveContainer:
-    socket: socket
     port_number: int
-    container_name: str
+    container: docker.api.container
 
 
 @dataclass
@@ -27,6 +28,7 @@ class ContainerCreation:
     port: int = -1
     team_name: str = ""
     team_members: str = ""
+    container_id: str = ""
 
 
 class DockerController:
@@ -34,6 +36,7 @@ class DockerController:
         self.active_containers: {str: ActiveContainer} = {}
         self.pc = PortController()
         self.gh = GHController()
+        self.client = docker.from_env()
 
     def __iter__(self):
         return self
@@ -63,19 +66,25 @@ class DockerController:
                 or team_member_task.result().status != GH_SC.OK):
             return ContainerCreation(status=DC_SC.BAD_GH_URL)
 
-        self.active_containers.update({
-            team_name_task.result().response:
-            ActiveContainer(
-                socket=port_task.result().socket,
-                port_number=port_task.result().port,
-                container_name='test'
-            )})
+        res = await self._run_container(
+            gh_url, port_task.result())
+
+        if res == "":
+            return ContainerCreation(
+                status=DC_SC.FAILED_TO_START_DOCKER_C
+            )
+
+        self.active_containers[team_name_task.result().response] = ActiveContainer(
+            port_number=port_task.result().port,
+            container=res
+        )
 
         return ContainerCreation(
             status=DC_SC.OK,
             port=port_task.result().port,
             team_name=team_name_task.result().response,
-            team_members=team_member_task.result().response
+            team_members=team_member_task.result().response,
+            container_id=res.id
         )
 
     def get_active_containers(self) -> {ActiveContainer}:
@@ -91,8 +100,14 @@ class DockerController:
     # unsure if I want this private or not
     async def kill_conatiner(self, container_id: str) -> DC_SC:
         """Kills a given container"""
-        sleep(1)
         print("[DockerController._kill_conatiner] UNIMPLEMENTED")
+        try:
+            print(f"Attempting to kill {container_id}")
+            self.client.containers.get(container_id).remove()
+        except docker.errors.APIError as e:
+            print(e)
+            return DC_SC.FAILED_TO_KILL_DOCKER_C
+        print(f"Sucessfuly killed {container_id}")
         return DC_SC.OK
 
     async def restart_conatiner(self, container_id: str) -> DC_SC:
@@ -100,3 +115,36 @@ class DockerController:
         sleep(1)
         print("[DockerController.restart_conatiner] UNIMPLEMENTED")
         return DC_SC.OK
+
+    async def _run_container(
+            self,
+            gh_url: str,
+            pa: PortAssignment) -> docker.api.container:
+        """Starts the docker container for agent poker api"""
+        print("[DockerController._run_container] INCOMPLETE")
+
+        # Free socket.. should check for failure tbh
+        pa.socket.close()
+
+        try:
+            container = self.client.containers.run(
+                'eclipse-temurin',
+                mem_limit="128g",
+                ports={'8000/tcp': pa.port},
+                restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},
+                detach=True
+            )
+
+            # WARN: If detach is set to False, returns the logs.
+            # when detach is set to True, we get the container object!
+            # We want this!
+            return container
+        except docker.errors.ContainerError:
+            print("[_run_container] Container Error")
+            return ""
+        except docker.errors.ImageNotFound:
+            print("[_run_container] image not found!")
+            return ""
+        except docker.errors.APIError as e:
+            print(f"[_run_container] APIError: {e}")
+            return ""
