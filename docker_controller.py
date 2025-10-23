@@ -61,7 +61,7 @@ class DockerController:
 
         # If either gh task fails, return bad container?
         # Yes, I want to know which team and who is on it at all times
-        # TODO: Handle GH errors
+        # TODO: Handle GH errors and bubble back through API response
         if (team_name_task.result().status != GH_SC.OK
                 or team_member_task.result().status != GH_SC.OK):
             return ContainerCreation(status=DC_SC.BAD_GH_URL)
@@ -69,12 +69,14 @@ class DockerController:
         res = await self._run_container(
             gh_url, port_task.result())
 
-        if res == "":
+        if res is None:
             return ContainerCreation(
                 status=DC_SC.FAILED_TO_START_DOCKER_C
             )
 
-        self.active_containers[team_name_task.result().response] = ActiveContainer(
+        # python linter can suck it
+        self.active_containers[
+            team_name_task.result().response] = ActiveContainer(
             port_number=port_task.result().port,
             container=res
         )
@@ -119,7 +121,7 @@ class DockerController:
     async def _run_container(
             self,
             gh_url: str,
-            pa: PortAssignment) -> docker.api.container:
+            pa: PortAssignment) -> docker.api.container | None:
         """Starts the docker container for agent poker api"""
         print("[DockerController._run_container] INCOMPLETE")
 
@@ -141,10 +143,10 @@ class DockerController:
             return container
         except docker.errors.ContainerError:
             print("[_run_container] Container Error")
-            return ""
+            return None
         except docker.errors.ImageNotFound:
             print("[_run_container] image not found!")
-            return ""
+            return None
         except docker.errors.APIError as e:
             print(f"[_run_container] APIError: {e}")
-            return ""
+            return None
