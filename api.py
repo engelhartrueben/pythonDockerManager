@@ -1,21 +1,10 @@
-'''
-agents: dictionary = {}
-
-Endpoints:
-   async add_agent(github_repo_url: string) -> Port Number
-       asyncio.create_task(create_new_container(port))
-       return "{ port: port }"
-
-   get_all_agengts() -> [agent names]
-      return JSON.stringify(agents)
-'''
 import asyncio
-from fastapi import FastAPI
 import json
-# from typing import Union
-from docker_controller import DockerController, DC_SC
-from pydantic import BaseModel
 import docker
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from docker_controller import DockerController, DC_SC
 
 app = FastAPI()
 dc = DockerController()
@@ -31,29 +20,41 @@ class KillAgentReq(BaseModel):
 
 @app.post("/add_agent")
 async def add_agent(req: AddAgentReq) -> str:
-    task = asyncio.create_task(dc.create_new_container(req.gh_url))
+    """
+    Add an agent to the pool of existing agents.
+    Takes in a gh_url to be pulled down, compiled, and
+    eventually exectuted.
+    """
+    task = await asyncio.create_task(dc.create_new_container(req.gh_url))
 
-    await task
-
-    if task.result().status != DC_SC.OK:
+    if task.status != DC_SC.OK:
         return json.dumps({"status": "bad"})
 
     print(task.result())
     return json.dumps({
-        "port": task.result().port,
+        "port": task.port,
         "status": "ok",
-        "container_id": task.result().container_id
+        "container_id": task.container_id
     })
 
 
 @app.post("/get_all_agents")
 def get_all_agents() -> str:
+    """
+    [unimplemented]
+
+    Will eventually return every agent, their name, and
+    container id.
+    """
     return json.dumps({"unimplemented": "unimplemented"})
 
 
 @app.post("/get_all_containers")
 def get_all_containers() -> str:
-    """Returns all known containers"""
+    """
+    Returns all known containers.
+    Not entirely useful at the moment.
+    """
     res = {}
     print(dc.client.containers.list(all=True))
     for container in dc.active_containers.values():
@@ -63,6 +64,10 @@ def get_all_containers() -> str:
 
 @app.delete("/kill_all_agents")
 def kill_all_agents():
+    """
+    Kills all docker containers on the machine.
+    DANGEROUS AF
+    """
     for container in dc.client.containers.list(all=True):
         try:
             container.remove()
@@ -73,6 +78,9 @@ def kill_all_agents():
 
 @app.post("/kill_agent")
 async def kill_agent(req: KillAgentReq) -> str:
+    """
+    Kills a specific docker container given a container id
+    """
     res = await dc.kill_conatiner(req.container_id)
 
     match res:
@@ -87,5 +95,9 @@ async def kill_agent(req: KillAgentReq) -> str:
 
 @app.post("/restart_agent")
 def restart_agent() -> str:
+    """
+    Will eventually restart a docker container given a 
+    container id.
+    """
     dc.restart_conatiner("")
     return json.dumps({"unimplemented": "unimplemented"})
