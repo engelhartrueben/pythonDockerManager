@@ -51,6 +51,8 @@ class DockerController:
         # Get available TCP port
         # THEN
         # Create Docker Container
+        #   Copy over some bash script to pull down repo, compile, and run jar
+        #   ^^ This will use the "volume" paramater
         # Return ContainerCreation
 
         async with asyncio.TaskGroup() as tg:
@@ -121,7 +123,7 @@ class DockerController:
     async def _run_container(
             self,
             gh_url: str,
-            pa: PortAssignment) -> docker.api.container | None:
+            pa: PortAssignment) -> docker.api.container:
         """Starts the docker container for agent poker api"""
         print("[DockerController._run_container] INCOMPLETE")
 
