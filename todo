@@ -11,4 +11,5 @@ gather this information.
 
 # ENTIRE PROJECT TODO
 1. Create main repo, with each component as a submodule
-
+2. AUTH AUTH AUTH
+    Essentially, at project start, I want a program to create an auth key that is used throughout. Mostly godot to pythonDockerController.
