@@ -14,7 +14,15 @@ class AddAgentReq(BaseModel):
     gh_url: str
 
 
+class GetLogsReq(BaseModel):
+    container_id: str
+
+
 class KillAgentReq(BaseModel):
+    container_id: str
+
+
+class CommandReq(BaseModel):
     container_id: str
 
 
@@ -30,7 +38,7 @@ async def add_agent(req: AddAgentReq) -> str:
     if task.status != DC_SC.OK:
         return json.dumps({"status": "bad"})
 
-    print(task.result())
+    print(task)
     return json.dumps({
         "port": task.port,
         "status": "ok",
@@ -70,7 +78,7 @@ def kill_all_agents():
     """
     for container in dc.client.containers.list(all=True):
         try:
-            container.remove()
+            container.kill()
         except docker.errors.APIError as e:
             print(f"failed to remove a conatiner: {e}")
     return json.dumps({"ok": "ok"})
@@ -93,6 +101,17 @@ async def kill_agent(req: KillAgentReq) -> str:
             return json.dumps({"message": "unhandled. dummy"})
 
 
+@app.post('/test/print_conatiner_logs')
+def get_conatiner_logs(req: GetLogsReq) -> str:
+    try:
+        print(dc.client.containers.get(req.container_id).logs().decode('utf-8'))
+    except docker.errors.APIError as e:
+        print(f"[/test/print_conatiner_logs] ERROR: {e}")
+        return json.dumps({"bad": "bad"})
+
+    return json.dumps({"ok": "ok"})
+
+
 @app.post("/restart_agent")
 def restart_agent() -> str:
     """
@@ -101,3 +120,12 @@ def restart_agent() -> str:
     """
     dc.restart_conatiner("")
     return json.dumps({"unimplemented": "unimplemented"})
+
+
+@app.post("/commands")
+def command(req: CommandReq) -> str:
+    container = dc.client.containers.get(req.container_id)
+    print(container.status)
+    container.reload()
+    print(container.status)
+    return json.dumps({"ok": "ok"})

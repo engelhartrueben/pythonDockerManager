@@ -107,7 +107,7 @@ class DockerController:
         print("[DockerController._kill_conatiner] UNIMPLEMENTED")
         try:
             print(f"Attempting to kill {container_id}")
-            self.client.containers.get(container_id).remove()
+            self.client.containers.get(container_id).kill()
         except docker.errors.APIError as e:
             print(e)
             return DC_SC.FAILED_TO_KILL_DOCKER_C
@@ -132,22 +132,28 @@ class DockerController:
 
         try:
             container = self.client.containers.run(
-                'eclipse-temurin',
+                'alpine',
+                command=['./test.sh'],
                 mem_limit="128g",
-                ports={'8000/tcp': pa.port},
+                ports={'8080/tcp': pa.port},
                 restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},
-                detach=True
+                detach=True,
+                volumes={
+                    '/home/ruby/development/ruby_poker/python_docker/test.sh': {'bind': '/home/test.sh', 'mode': 'ro'}},
+                auto_remove=False,
+                working_dir="/home/",
+                network_mode="bridge"
             )
 
             # WARN: If detach is set to False, returns the logs.
             # when detach is set to True, we get the container object!
             # We want this!
             return container
-        except docker.errors.ContainerError:
-            print("[_run_container] Container Error")
+        except docker.errors.ContainerError as e:
+            print(f"[_run_container] Container Error: {e}")
             return None
-        except docker.errors.ImageNotFound:
-            print("[_run_container] image not found!")
+        except docker.errors.ImageNotFound as e:
+            print(f"[_run_container] image not found: {e}")
             return None
         except docker.errors.APIError as e:
             print(f"[_run_container] APIError: {e}")
