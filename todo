@@ -1,7 +1,14 @@
-# TODO
+# pythonDockerController TODO
 1. Implement persistent data. sqlite maybe
 2. Remove all gh stuff. We will no longer be getting team name and members from the repo. Instead, each api will have an endpoint to
 gather this information.
 3. Work through all the endpoint responses. These need to be more clear with proper status codes.
 4. Make sure all errors are being caught, handled or notifying the user.
+
+# spring boot agent_demo TODO
+1. Create all endpoints (get_team_name, get_team_members, health_check, start_game, respond)
+2. Create card AST. Effectively, I want the players methods to take in a list of cards, rather than the raw JSON.
+
+# ENTIRE PROJECT TODO
+1. Create main repo, with each component as a submodule
 
