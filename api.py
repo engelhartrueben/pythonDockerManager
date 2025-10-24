@@ -70,6 +70,8 @@ def get_all_containers() -> str:
     return json.dumps(res)
 
 
+# TODO: Need to work on all returns!
+# Should return that it failed to kill agents
 @app.delete("/kill_all_agents")
 def kill_all_agents():
     """

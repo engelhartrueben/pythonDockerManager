@@ -19,7 +19,7 @@ class PortAssignment:
     """
     status: P_SC
     port: int
-    socket: socket
+    socket: socket.socket
 
 
 class PortController:

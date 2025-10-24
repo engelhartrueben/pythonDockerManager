@@ -43,9 +43,7 @@ class DockerController:
 
     async def create_new_container(self, gh_url: str) -> ContainerCreation:
         """Creates a new container."""
-
-        print("[DockerController.create_new_container] PARTIAL IMPLEMENT")
-
+        print("Attempting to build new agent.")
         # Get team name
         # Get team member names
         # Get available TCP port
@@ -61,9 +59,8 @@ class DockerController:
             team_member_task = tg.create_task(
                 self.gh.get_gh_team_member_names(gh_url))
 
-        # If either gh task fails, return bad container?
-        # Yes, I want to know which team and who is on it at all times
         # TODO: Handle GH errors and bubble back through API response
+        # ... this will be going away lol
         if (team_name_task.result().status != GH_SC.OK
                 or team_member_task.result().status != GH_SC.OK):
             return ContainerCreation(status=DC_SC.BAD_GH_URL)
@@ -76,7 +73,7 @@ class DockerController:
                 status=DC_SC.FAILED_TO_START_DOCKER_C
             )
 
-        # python linter can suck it
+        # TODO: Change this to db
         self.active_containers[
             team_name_task.result().response] = ActiveContainer(
             port_number=port_task.result().port,
@@ -131,7 +128,7 @@ class DockerController:
         pa.socket.close()
 
         try:
-            container = self.client.containers.run(
+            return self.client.containers.run(
                 'alpine',
                 command=['./test.sh'],
                 mem_limit="128g",
@@ -144,11 +141,6 @@ class DockerController:
                 working_dir="/home/",
                 network_mode="bridge"
             )
-
-            # WARN: If detach is set to False, returns the logs.
-            # when detach is set to True, we get the container object!
-            # We want this!
-            return container
         except docker.errors.ContainerError as e:
             print(f"[_run_container] Container Error: {e}")
             return None
