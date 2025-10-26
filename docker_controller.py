@@ -2,8 +2,6 @@ from enum import Enum
 from dataclasses import dataclass
 from time import sleep
 from port_controller import PortController, PortAssignment
-from gh_controller import GHController, GH_SC
-import asyncio
 import docker
 
 
@@ -26,8 +24,6 @@ class ActiveContainer:
 class ContainerCreation:
     status: DC_SC
     port: int = -1
-    team_name: str = ""
-    team_members: str = ""
     container_id: str = ""
 
 
@@ -35,7 +31,6 @@ class DockerController:
     def __init__(self):
         self.active_containers: {str: ActiveContainer} = {}
         self.pc = PortController()
-        self.gh = GHController()
         self.client = docker.from_env()
 
     def __iter__(self):
@@ -44,8 +39,6 @@ class DockerController:
     async def create_new_container(self, gh_url: str) -> ContainerCreation:
         """Creates a new container."""
         print("Attempting to build new agent.")
-        # Get team name
-        # Get team member names
         # Get available TCP port
         # THEN
         # Create Docker Container
@@ -53,38 +46,35 @@ class DockerController:
         #   ^^ This will use the "volume" paramater
         # Return ContainerCreation
 
-        async with asyncio.TaskGroup() as tg:
-            port_task = tg.create_task(self.pc.get_available_TCP_port())
-            team_name_task = tg.create_task(self.gh.get_gh_team_name(gh_url))
-            team_member_task = tg.create_task(
-                self.gh.get_gh_team_member_names(gh_url))
+        port_task = await self.pc.get_available_TCP_port()
+        # team_name_task = tg.create_task(self.gh.get_gh_team_name(gh_url))
+        # team_member_task = tg.create_task(
+        #     self.gh.get_gh_team_member_names(gh_url))
 
-        # TODO: Handle GH errors and bubble back through API response
-        # ... this will be going away lol
-        if (team_name_task.result().status != GH_SC.OK
-                or team_member_task.result().status != GH_SC.OK):
-            return ContainerCreation(status=DC_SC.BAD_GH_URL)
+        # # ... this will be going away lol
+        # if (team_name_task.result().status != GH_SC.OK
+        #         or team_member_task.result().status != GH_SC.OK):
+        #     return ContainerCreation(status=DC_SC.BAD_GH_URL)
 
         res = await self._run_container(
-            gh_url, port_task.result())
+            gh_url, port_task)
 
         if res is None:
+            print("FAILED to build new agent")
             return ContainerCreation(
                 status=DC_SC.FAILED_TO_START_DOCKER_C
             )
 
-        # TODO: Change this to db
-        self.active_containers[
-            team_name_task.result().response] = ActiveContainer(
-            port_number=port_task.result().port,
-            container=res
-        )
+        # # TODO: Change this to db
+        # self.active_containers[
+        #     team_name_task.result().response] = ActiveContainer(
+        #     port_number=port_task.result().port,
+        #     container=res
+        # )
 
         return ContainerCreation(
             status=DC_SC.OK,
-            port=port_task.result().port,
-            team_name=team_name_task.result().response,
-            team_members=team_member_task.result().response,
+            port=port_task.port,
             container_id=res.id
         )
 
@@ -130,16 +120,27 @@ class DockerController:
         try:
             return self.client.containers.run(
                 'alpine',
-                command=['./test.sh'],
-                mem_limit="128g",
-                ports={'8080/tcp': pa.port},
-                restart_policy={"Name": "on-failure", "MaximumRetryCount": 5},
-                detach=True,
-                volumes={
-                    '/home/ruby/development/ruby_poker/python_docker/test.sh': {'bind': '/home/test.sh', 'mode': 'ro'}},
                 auto_remove=False,
+                command=['./test.sh'],
+                detach=True,
+                environment=[f"GH_REPO_URL={gh_url}"],
+                mem_limit="128g",
+                network_mode="bridge",
+                ports={
+                    '8080/tcp':
+                    pa.port
+                },
+                restart_policy={
+                    "Name": "on-failure",
+                    "MaximumRetryCount": 1
+                },
+                volumes={
+                    '/home/ruby/development/ruby_poker/python_docker/test.sh': {
+                        'bind': '/home/test.sh',
+                        'mode': 'ro'
+                    }
+                },
                 working_dir="/home/",
-                network_mode="bridge"
             )
         except docker.errors.ContainerError as e:
             print(f"[_run_container] Container Error: {e}")

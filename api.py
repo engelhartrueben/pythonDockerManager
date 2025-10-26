@@ -80,7 +80,7 @@ def kill_all_agents():
     """
     for container in dc.client.containers.list(all=True):
         try:
-            container.kill()
+            container.remove()
         except docker.errors.APIError as e:
             print(f"failed to remove a conatiner: {e}")
     return json.dumps({"ok": "ok"})
