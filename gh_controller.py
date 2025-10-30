@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import IntEnum
 import requests
 import os
 from dotenv import load_dotenv
@@ -9,14 +9,14 @@ load_dotenv()
 GH_MIN_REQUIRED_PARSE_LENGTH = 4
 
 
-class GH_SC(Enum):
-    OK = 1
-    BAD_URL = 2
-    TIMEOUT = 3
-    REQ_FAIL_H = 4
-    HTTP_ERROR = 5
-    TEAM_NAME_TOO_LONG = 6
-    TEAM_MEMBER_TOO_LONG = 7
+class GH_SC(IntEnum):
+    TEAM_NAME_TOO_LONG = -6
+    TEAM_MEMBER_TOO_LONG = -5
+    HTTP_ERROR = -4
+    REQ_FAIL_H = -3
+    TIMEOUT = -2
+    BAD_URL = -1
+    OK = 0
 
 
 @dataclass

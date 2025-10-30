@@ -1,17 +1,17 @@
-from enum import Enum
+from enum import IntEnum
 from dataclasses import dataclass
 from time import sleep
 from port_controller import PortController, PortAssignment
 import docker
 
 
-class DC_SC(Enum):
+class DC_SC(IntEnum):
     FAILED_TO_START_DOCKER_C = -5
     FAILED_TO_KILL_DOCKER_C = -4
     BAD_GH_TEAM_NAME = -3
     BAD_GH_TEAM_MEMBER = -2
     BAD_GH_URL = -1
-    OK = 1
+    OK = 0
 
 
 @dataclass
