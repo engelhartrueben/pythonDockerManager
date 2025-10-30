@@ -1,9 +1,9 @@
-from enum import Enum
+from enum import IntEnum
 from dataclasses import dataclass
 import socket
 
 
-class P_SC(Enum):
+class P_SC(IntEnum):
     FAILED_TO_FIND_PORT = -1
     OK = 1
 
