@@ -1,140 +1,142 @@
-import asyncio
-import atexit
-import time
 import os
+from pathlib import Path
 from dotenv import load_dotenv
-# import sqlite3
-import docker
-from port_controller import PortController as pc
+import sqlite3
+from enum import IntEnum
 
 load_dotenv()
 
-DEFAULT_SQLITE3_CONTAINER_NAME = "ruby_poker_sqlite3"
+DEFAULT_SQLITE3_DB_DIR = "/.ruby_poker/"
+DEFAULT_SQLITE3_DB_NAME = "database.db"
+
+# https://docs.python.org/3/library/sqlite3.html#sqlite3.threadsafety
+sqlite3.threadsafety = 3
+
+
+class DB_initialize_status(IntEnum):
+    FAILED_TABLE_INTIALIZATION = -3
+    NOT_A_SQLITE_CONNECTION_OBJ = -2
+    SQLITE3_NOT_CONNECT = -1
+    READY = 0
+
+
+class DB_connect_status(IntEnum):
+    H_FAIL = -1
+    OK = 0
 
 
 class DB_Controller:
     def __init__(
         self,
-        container_name: str = os.getenv("SQLITE3_CONTAINER_NAME")
-            or DEFAULT_SQLITE3_CONTAINER_NAME
+        db_name: str = DEFAULT_SQLITE3_DB_NAME,
     ):
-        self._conatiner_name: str = container_name
-        self._container_object: docker.container = None
-        self._port: int = None
-        self._client = docker.from_env()
+        self._db_name: str = db_name
+        self._con: sqlite3.Connection = None
 
     # PUBLIC
 
-    async def create(self):
-        if await self._check_for_container():
-            print(f"sqlite3 Container found: Listening on port {self._port}.")
-            return None
-
-        print("Creating sqlite3 container.")
-        if await self._deploy_container():
-            print(f"sqlite3 Container created: Listening on port {
-                  self._port}.")
-            return None
-        else:
-            # Figure out what happened lol
-            print("Something bad happened")
-
-    def get_logs(self) -> str:
-        try:
-            logs = self._container_object.logs().decode('utf-8')
-        except docker.errors.APIError as e:
-            print(f"Failed to get container logs: {e}")
-            exit(-1)
-        return logs
-
-    def get_port(self) -> int:
-        return self._port
-
-    def get_container_name(self) -> str:
-        return self._conatiner_name
-
-    def kill(self):
-        # self._container_object.kill()
-        print(self._container_object.status)
-
-    # PRIVATE
-
-    async def _check_for_container(self) -> bool:
+    def connect(self) -> DB_connect_status:
         """
-        Checks if a sqlite docker container for this project is already
-        up and running.
+        Attempt to connect to sqlite3 database.
 
-        Ideally, the container should be stopped atexit.
-        If just stopped, start the container and run a quick test?
+        In the event that the db file does not exist, it will be automatically
+        created.
 
-        TODO:
-            Check if container of self._container_name exists
-                If exists, find port and assign self._port
+        @return: DB_connect_status
+            DB_connect_status.H_FAIL is a program terminating failure
         """
-        try:
-            res = await self._client.containers.get(self._conatiner_name)
-            self._container_object = res
-            self._gather_container_attributes()
-            return True
-        except docker.errors.NotFound:
-            return False
-        except docker.errors.APIError as e:
-            print(f"db_controller._check_for_container: APIError {e}")
-            return False
+        home_dir = os.path.expanduser("~")
 
-    def _gather_container_attributes(self):
-        self._port = self._container_object.ports
-        print(f"self._port = {self._port}")
-
-    async def _deploy_container(self) -> bool:
-        port = await pc().get_available_TCP_port()
-        port.socket.close()
-        self._port = port.port
+        # Create .ruby_poker directory to store database
+        Path(home_dir +
+             DEFAULT_SQLITE3_DB_DIR).mkdir(parents=True, exist_ok=True)
 
         try:
-            self._container_object = self._client.containers.run(
-                'alpine/sqlite',
-                auto_remove=False,
-                # command=['./test.sh'],
-                detach=True,
-                # environment=[f"GH_REPO_URL={gh_url}"],
-                mem_limit="128g",  # TODO: Make this a .env
-                network_mode="bridge",
-                ports={
-                    '8080/tcp':
-                    port.port
-                },
-                restart_policy={
-                    "Name": "on-failure",
-                    "MaximumRetryCount": 3
-                },
-                # volumes={
-                #     '/home/ruby/development/ruby_poker/python_docker/test.sh': {
-                #         'bind': '/home/test.sh',
-                #         'mode': 'ro'
-                #     }
-                # },
-                working_dir="/home/",
+            self._con = sqlite3.connect(
+                home_dir + DEFAULT_SQLITE3_DB_DIR + self._db_name)
+        except Exception as e:
+            print(f"DB connection error: {e}")
+            return DB_connect_status.H_FAIL
+
+        init: (DB_initialize_status, None | str) = self._initialize_db()
+
+        # Match case, but we need to preserve the second indx of the tuple
+        if init[0] is DB_initialize_status.SQLITE3_NOT_CONNECT:
+            """
+            self.con should be a con object at this point.
+            If not, something has gone horribly wrong.
+            """
+            print("sqlite3 db is not connected.\n"
+                  "Something has gone horribly wrong.")
+            return DB_connect_status.H_FAIL
+
+        elif init[0] is DB_initialize_status.NOT_A_SQLITE_CONNECTION_OBJ:
+            """type checking."""
+            print("Not a connection object.\n"
+                  "Something has gone horribly wrong.")
+            return DB_connect_status.H_FAIL
+
+        elif init[0] is DB_initialize_status.FAILED_TABLE_INTIALIZATION:
+            print(f"Failed to initialize table: {init.index(1)}")
+            return DB_connect_status.H_FAIL
+
+        elif init[0] is DB_initialize_status.READY:
+            print("sqlite3 db is ready")
+            return DB_connect_status.OK
+
+    def get_db_name(self) -> str:
+        return self._db_name
+
+    def get_db_dir(self) -> str:
+        return self._db_dir
+
+        # PRIVATE
+
+    def _initialize_db(self) -> (DB_initialize_status, str | None):
+        """
+        Initializes the database file and creates the 'agents' table
+        if it does not exist.
+
+        @reaturn a tuple containing the status of the intialization,
+        and any relevant error message
+
+        DB_initialize_status.SQLITE3_NOT_CONNECT:
+            connection object does not exist
+        DB_initialize_status.NOT_A_SQLITE_CONNECTION_OBJ:
+            expected connection object, got something else
+        DB_initialize_status.FAILED_TABLE_INTIALIZATION:
+            Failed to intialize the table(s).
+            Is returned with a relevant error message.
+        DB_initialize_status.READY:
+            sqlite3 db and tables are ready
+        """
+        if self._con is None:
+            return (DB_initialize_status.SQLITE3_NOT_CONNECT, None)
+
+        if type(self._con) is not sqlite3.Connection:
+            return (DB_initialize_status.NOT_A_SQLITE_CONNECTION_OBJ, None)
+
+        cur = self._con.cursor()
+
+        try:
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS agents\
+                    (\
+                        id              INTEGER PRIMARY KEY,\
+                        container_name  TEXT NOT NULL,\
+                        container_id    TEXT NOT NULL,\
+                        start_time      TEXT NOT NULL,\
+                        team_name       TEXT,\
+                        team_members    TEXT,\
+                        port_number     INT NOT NULL,\
+                        active          INT\
+                     )"
             )
-            return True
-        except docker.errors.ContainerError as e:
-            print(f"[_run_container] Container Error: {e}")
-            exit(-1)
-        except docker.errors.ImageNotFound as e:
-            print(f"[_run_container] image not found: {e}")
-            exit(-1)
-        except docker.errors.APIError as e:
-            print(f"[_run_container] APIError: {e}")
-            exit(-1)
-
-
-async def get():
-    db = DB_Controller()
-    atexit.register(db.kill)
-    await db.create()
-    time.sleep(5)
-    print(db.get_logs())
+            return (DB_initialize_status.READY, None)
+        except Exception as e:
+            return (DB_initialize_status.FAILED_TABLE_INTIALIZATION, e)
 
 
 if __name__ == "__main__":
-    asyncio.run(get())
+    db = DB_Controller()
+    db.connect()
