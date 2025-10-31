@@ -1,16 +1,40 @@
 import os
-from pathlib import Path
-from dotenv import load_dotenv
 import sqlite3
+
 from enum import IntEnum
+from dataclasses import dataclass
+from datetime import datetime
+from dotenv import load_dotenv
+from pathlib import Path
 
 load_dotenv()
 
 DEFAULT_SQLITE3_DB_DIR = "/.ruby_poker/"
 DEFAULT_SQLITE3_DB_NAME = "database.db"
 
+
+@dataclass
+class Agent:
+    container_name: str = None
+    container_id: str = None
+    start_time: datetime = None
+    team_name: str = None
+    team_members: str = None
+    port_number: int = -1
+    active: bool = -1
+
+
 # https://docs.python.org/3/library/sqlite3.html#sqlite3.threadsafety
 sqlite3.threadsafety = 3
+
+
+class DB_new_agent_status(IntEnum):
+    FAILED_EXECUTION = -5
+    BAD_ATTRIBUTE_TYPE = -4
+    MISSING_ATTRIBUTE = -3
+    NOT_A_SQLITE_CONNECTION_OBJ = -2
+    SQLITE3_NOT_CONNECT = -1
+    SUBMITTED = 0
 
 
 class DB_initialize_status(IntEnum):
@@ -84,6 +108,88 @@ class DB_Controller:
             print("sqlite3 db is ready")
             return DB_connect_status.OK
 
+    def add_new_agent(self, new_agent: Agent) -> (
+            DB_new_agent_status, str | None):
+
+        if self._con is None:
+            return (DB_new_agent_status.SQLITE3_NOT_CONNECT, None)
+
+        if type(self._con) is not sqlite3.Connection:
+            return (DB_new_agent_status.NOT_A_SQLITE_CONNECTION_OBJ, None)
+
+        # Check that values are there
+        if new_agent.container_name is None:
+            return (DB_new_agent_status.MISSING_ATTRIBUTE,
+                    "missing container_name")
+        elif new_agent.container_id is None:
+            return (DB_new_agent_status.MISSING_ATTRIBUTE,
+                    "missing container_id")
+        elif new_agent.start_time is None:
+            return (DB_new_agent_status.MISSING_ATTRIBUTE,
+                    "missing start_time")
+        elif new_agent.port_number is None:
+            return (DB_new_agent_status.MISSING_ATTRIBUTE,
+                    "missing port_number")
+
+        # Check if values are appropriate type
+        if type(new_agent.container_name) is not str:
+            return (DB_new_agent_status.BAD_ATTRIBUTE_TYPE,
+                    "bad 'container_name' type, expected str but got: "
+                    f"{type(new_agent.container_name)}")
+        elif type(new_agent.container_id) is not str:
+            return (DB_new_agent_status.BAD_ATTRIBUTE_TYPE,
+                    "bad 'container_id' type, expected str but got: "
+                    f"{type(new_agent.container_id)}")
+        elif type(new_agent.start_time) is not datetime:
+            return (DB_new_agent_status.BAD_ATTRIBUTE_TYPE,
+                    "bad 'start_time' type, expected datetime but got: "
+                    f"{type(new_agent.start_time)}")
+        elif type(new_agent.port_number) is not int:
+            return (DB_new_agent_status.BAD_ATTRIBUTE_TYPE,
+                    "bad 'port_number' type, expected int but got: "
+                    f"{type(new_agent.port_number)}")
+
+        # check if team name or team members is populated
+        if new_agent.team_members is not None:
+            print("team_members is populated when it shouldn't be."
+                  f"Got: {new_agent.team_members}")
+            new_agent.team_members = ""
+
+        if new_agent.team_name is not None:
+            print("team_name is populated when it shouldn't be."
+                  f"Got: {new_agent.team_name}")
+            new_agent.team_name = ""
+
+        if new_agent.active != -1:
+            print("active is populated when it shouldn't be."
+                  f"Got: {new_agent.active}")
+
+        new_agent.active = int(False)
+
+        cur: sqlite3.Cursor = self._con.cursor()
+
+        try:
+            cur.execute("INSERT INTO agents(\
+                    container_name, container_id,\
+                    start_time, team_name, team_members,\
+                    port_number, active)\
+                    VALUES(?,?,?,?,?,?,?)", (
+                new_agent.container_name,
+                new_agent.container_id,
+                new_agent.start_time.isoformat(),
+                new_agent.team_name,
+                new_agent.team_members,
+                new_agent.port_number,
+                new_agent.active
+            ))
+        except Exception as e:
+            cur.close()
+            return (DB_new_agent_status.FAILED_EXECUTION, e)
+
+        self._con.commit()
+        cur.close()
+        return (DB_new_agent_status.SUBMITTED, None)
+
     def get_db_name(self) -> str:
         return self._db_name
 
@@ -132,11 +238,24 @@ class DB_Controller:
                         active          INT\
                      )"
             )
-            return (DB_initialize_status.READY, None)
         except Exception as e:
+            cur.close(0)
             return (DB_initialize_status.FAILED_TABLE_INTIALIZATION, e)
+
+        # Do i need to commit?
+        self._con.commit()
+
+        cur.close()
+        return (DB_initialize_status.READY, None)
 
 
 if __name__ == "__main__":
     db = DB_Controller()
     db.connect()
+
+    agent = Agent(
+        container_name="test",
+        container_id="4",
+        start_time=datetime.now(),
+        port_number=1234)
+    print(db.add_new_agent(agent))
