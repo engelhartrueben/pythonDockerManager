@@ -27,7 +27,7 @@ class ContainerCreation:
     container_id: str = ""
 
 
-class DockerController:
+class AgentController:
     def __init__(self):
         self.active_containers: {str: ActiveContainer} = {}
         self.pc = PortController()
@@ -47,14 +47,6 @@ class DockerController:
         # Return ContainerCreation
 
         port_task = await self.pc.get_available_TCP_port()
-        # team_name_task = tg.create_task(self.gh.get_gh_team_name(gh_url))
-        # team_member_task = tg.create_task(
-        #     self.gh.get_gh_team_member_names(gh_url))
-
-        # # ... this will be going away lol
-        # if (team_name_task.result().status != GH_SC.OK
-        #         or team_member_task.result().status != GH_SC.OK):
-        #     return ContainerCreation(status=DC_SC.BAD_GH_URL)
 
         res = await self._run_container(
             gh_url, port_task)
@@ -124,7 +116,7 @@ class DockerController:
                 command=['./test.sh'],
                 detach=True,
                 environment=[f"GH_REPO_URL={gh_url}"],
-                mem_limit="128g",
+                mem_limit="128mb",  # TODO: make this a .env
                 network_mode="bridge",
                 ports={
                     '8080/tcp':

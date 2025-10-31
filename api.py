@@ -4,10 +4,10 @@ import docker
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from docker_controller import DockerController, DC_SC
+from docker_controller import AgentController, DC_SC
 
 app = FastAPI()
-dc = DockerController()
+ac = AgentController()
 
 
 class AddAgentReq(BaseModel):
@@ -33,7 +33,7 @@ async def add_agent(req: AddAgentReq) -> str:
     Takes in a gh_url to be pulled down, compiled, and
     eventually exectuted.
     """
-    task = await asyncio.create_task(dc.create_new_container(req.gh_url))
+    task = await asyncio.create_task(ac.create_new_container(req.gh_url))
 
     if task.status != DC_SC.OK:
         return json.dumps({"status": "bad"})
@@ -64,8 +64,8 @@ def get_all_containers() -> str:
     Not entirely useful at the moment.
     """
     res = {}
-    print(dc.client.containers.list(all=True))
-    for container in dc.active_containers.values():
+    print(ac.client.containers.list(all=True))
+    for container in ac.active_containers.values():
         res[container.port_number] = container.container.id
     return json.dumps(res)
 
@@ -78,7 +78,7 @@ def kill_all_agents():
     Kills all docker containers on the machine.
     DANGEROUS AF
     """
-    for container in dc.client.containers.list(all=True):
+    for container in ac.client.containers.list(all=True):
         try:
             container.remove()
         except docker.errors.APIError as e:
@@ -91,7 +91,7 @@ async def kill_agent(req: KillAgentReq) -> str:
     """
     Kills a specific docker container given a container id
     """
-    res = await dc.kill_conatiner(req.container_id)
+    res = await ac.kill_conatiner(req.container_id)
 
     match res:
         case DC_SC.FAILED_TO_KILL_DOCKER_C:
@@ -106,7 +106,7 @@ async def kill_agent(req: KillAgentReq) -> str:
 @app.post('/test/print_conatiner_logs')
 def get_conatiner_logs(req: GetLogsReq) -> str:
     try:
-        print(dc.client.containers.get(req.container_id).logs().decode('utf-8'))
+        print(ac.client.containers.get(req.container_id).logs().decode('utf-8'))
     except docker.errors.APIError as e:
         print(f"[/test/print_conatiner_logs] ERROR: {e}")
         return json.dumps({"bad": "bad"})
@@ -120,13 +120,13 @@ def restart_agent() -> str:
     Will eventually restart a docker container given a 
     container id.
     """
-    dc.restart_conatiner("")
+    ac.restart_conatiner("")
     return json.dumps({"unimplemented": "unimplemented"})
 
 
 @app.post("/commands")
 def command(req: CommandReq) -> str:
-    container = dc.client.containers.get(req.container_id)
+    container = ac.client.containers.get(req.container_id)
     print(container.status)
     container.reload()
     print(container.status)
