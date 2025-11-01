@@ -15,6 +15,7 @@ DEFAULT_SQLITE3_DB_NAME = "database.db"
 
 @dataclass
 class Agent:
+    id: int = -1
     container_name: str = None
     container_id: str = None
     start_time: datetime = None
@@ -42,6 +43,17 @@ class DB_initialize_status(IntEnum):
     NOT_A_SQLITE_CONNECTION_OBJ = -2
     SQLITE3_NOT_CONNECT = -1
     READY = 0
+
+
+class DB_query_status(IntEnum):
+    TOO_MANY_RESULTS = -6
+    QUERY_FAILED = -5
+    BAD_PARAM_TYPE = -4
+    MISSING_PARAM = -3
+    NOT_A_SQLITE_CONNECTION_OBJ = -2
+    SQLITE3_NOT_CONNECT = -1
+    SUCCESS = 0
+    NO_RESULT = 1
 
 
 class DB_connect_status(IntEnum):
@@ -187,8 +199,92 @@ class DB_Controller:
             return (DB_new_agent_status.FAILED_EXECUTION, e)
 
         self._con.commit()
+        id = cur.lastrowid
         cur.close()
-        return (DB_new_agent_status.SUBMITTED, None)
+        return (DB_new_agent_status.SUBMITTED, id)
+
+    def get_agent_data(self, agent_id: int) -> (
+            DB_query_status, int | None):
+        """
+        Gets agent data from sqlite3 database from agent it.
+        Expects only ever one result
+
+        if agent_id is Agent dataclass, query by id = agent_id.id.
+        if agent_id is int, query by id = int.
+        if agent_id is str, query by container_id = str.
+
+        Future feature: query using agent_id, container_name, or
+        container_id.
+
+        @return a tuple, with the first index always being DB_query_status,
+        and the second index either being a Agent dataclass, or an
+        error message depening.
+
+        Potential return structures:
+        (DB_query_status.SUCCESS, Agent):
+            Query suceeded.
+            It is returned with an Agent dataclass
+
+        (DB_query_status.SQLITE3_NOT_CONNECT, None):
+            connection object does not exist
+
+        (DB_query_status.NOT_A_SQLITE_CONNECTION_OBJ, None):
+            expected connection object, got something else
+
+        (DB_query_stats.MISSING PARAM, str):
+            Missing a necessary parameter.
+            It is returned with a str stating what param is missing.
+
+        (DB_query_status.BAD_PARAM_TYPE, str):
+            Param has unexpected type.
+            It is returned with a str stating unexpected param type.
+
+        (DB_query_status.QUERY_FAILED, str):
+            Query failed for some reason.
+            It is returned wiht a str stating query error.
+
+        (DB_query_status.NO_RESULT, None):
+            Query suceeded, but had no result.
+
+        (DB_query_status.TOO_MANY_RESULTS, None):
+            Query produced too many results.
+            If seen, something has gone horribly wrong.
+        """
+        if self._con is None:
+            return (DB_query_status.SQLITE3_NOT_CONNECT, None)
+
+        if type(self._con) is not sqlite3.Connection:
+            return (DB_query_status.NOT_A_SQLITE_CONNECTION_OBJ, None)
+
+        if agent_id is None:
+            return (DB_query_status.MISSING_PARAM, "missing agent_id")
+
+        if type(agent_id) is not int:
+            return (DB_query_status.BAD_PARAM_TYPE,
+                    "bad 'agent_id' type, expected int but got: "
+                    f"{type(agent_id)}")
+
+        cur: sqlite3.Cursor = self._con.cursor()
+        try:
+            data = cur.execute(
+                "SELECT * "
+                "FROM agents "
+                f"WHERE id = {agent_id};").fetchall()
+        except Exception as e:
+            cur.close()
+            return (DB_query_status.QUERY_FAILED, e)
+
+        cur.close()
+
+        match len(data):
+            case 0: return (DB_query_status.NO_RESULT,
+                            None)
+            case 1: return (DB_query_status.SUCCESS,
+                            self._parse_agent_data(data))
+            case _: return (DB_query_status.TOO_MANY_RESULTS,
+                            None)
+
+        return (DB_query_status.SUCCESS, agent_data)
 
     def get_db_name(self) -> str:
         return self._db_name
@@ -198,7 +294,7 @@ class DB_Controller:
 
         # PRIVATE
 
-    def _initialize_db(self) -> (DB_initialize_status, str | None):
+    def _initialize_db(self) -> (DB_initialize_status, int | str | None):
         """
         Initializes the database file and creates the 'agents' table
         if it does not exist.
@@ -206,15 +302,20 @@ class DB_Controller:
         @reaturn a tuple containing the status of the intialization,
         and any relevant error message
 
-        DB_initialize_status.SQLITE3_NOT_CONNECT:
+        Potential return structures:
+        (DB_initialize_status.READY, int):
+            sqlite3 db and tables are ready
+            It is returned with the id of the agent
+
+        (DB_initialize_status.SQLITE3_NOT_CONNECT, None):
             connection object does not exist
-        DB_initialize_status.NOT_A_SQLITE_CONNECTION_OBJ:
+
+        (DB_initialize_status.NOT_A_SQLITE_CONNECTION_OBJ, None):
             expected connection object, got something else
-        DB_initialize_status.FAILED_TABLE_INTIALIZATION:
+
+        (DB_initialize_status.FAILED_TABLE_INTIALIZATION, str):
             Failed to intialize the table(s).
             Is returned with a relevant error message.
-        DB_initialize_status.READY:
-            sqlite3 db and tables are ready
         """
         if self._con is None:
             return (DB_initialize_status.SQLITE3_NOT_CONNECT, None)
@@ -229,8 +330,8 @@ class DB_Controller:
                 "CREATE TABLE IF NOT EXISTS agents\
                     (\
                         id              INTEGER PRIMARY KEY,\
-                        container_name  TEXT NOT NULL,\
-                        container_id    TEXT NOT NULL,\
+                        container_name  TEXT NOT NULL UNIQUE,\
+                        container_id    TEXT NOT NULL UNIQUE,\
                         start_time      TEXT NOT NULL,\
                         team_name       TEXT,\
                         team_members    TEXT,\
@@ -244,18 +345,27 @@ class DB_Controller:
 
         # Do i need to commit?
         self._con.commit()
+        last_id = cur.lastrowid
 
         cur.close()
-        return (DB_initialize_status.READY, None)
+        return (DB_initialize_status.READY, last_id)
+
+    def _parse_agent_data(self, data: list) -> Agent:
+        # TODO: Test data is correct format first...
+        agent: Agent = Agent()
+        agent.container_name = data[0][1]
+        agent.container_id = data[0][2]
+        agent.start_time = data[0][3]
+        agent.team_name = data[0][4]
+        agent.team_members = data[0][5]
+        agent.port_number = data[0][6]
+        agent.active = data[0][7]
+        return agent
 
 
 if __name__ == "__main__":
     db = DB_Controller()
     db.connect()
 
-    agent = Agent(
-        container_name="test",
-        container_id="4",
-        start_time=datetime.now(),
-        port_number=1234)
-    print(db.add_new_agent(agent))
+    agent_data: (DB_query_status, Agent | str) = db.get_agent_data(6)
+    print(agent_data)
