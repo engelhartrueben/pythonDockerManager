@@ -204,12 +204,12 @@ class DB_Controller:
         return (DB_new_agent_status.SUBMITTED, id)
 
     def get_agent_data(self, agent_id: int) -> (
-            DB_query_status, int | None):
+            DB_query_status, int | str | None):
         """
         Gets agent data from sqlite3 database from agent it.
         Expects only ever one result
 
-        if agent_id is Agent dataclass, query by id = agent_id.id.
+        TODO: Implement
         if agent_id is int, query by id = int.
         if agent_id is str, query by container_id = str.
 
@@ -259,17 +259,28 @@ class DB_Controller:
         if agent_id is None:
             return (DB_query_status.MISSING_PARAM, "missing agent_id")
 
-        if type(agent_id) is not int:
-            return (DB_query_status.BAD_PARAM_TYPE,
-                    "bad 'agent_id' type, expected int but got: "
-                    f"{type(agent_id)}")
+        # if not (type(agent_id) is int or type(agent_id) is str):
+        #     return (DB_query_status.BAD_PARAM_TYPE,
+        #             "bad 'agent_id' type, expected (int | str) but got: "
+        #             f"{type(agent_id)}")
 
         cur: sqlite3.Cursor = self._con.cursor()
+        query_str: str
+
+        match agent_id:
+            case str():
+                query_str = f"SELECT * FROM agents WHERE container_id='{
+                    agent_id}';"
+            case int():
+                query_str = f"SELECT * FROM agents WHERE id={
+                    agent_id};"
+            case _:
+                return (DB_query_status.BAD_PARAM_TYPE,
+                        "bad 'agent_id' type, expected (int | str) but got: "
+                        f"{type(agent_id)}")
+
         try:
-            data = cur.execute(
-                "SELECT * "
-                "FROM agents "
-                f"WHERE id = {agent_id};").fetchall()
+            data = cur.execute(query_str).fetchall()
         except Exception as e:
             cur.close()
             return (DB_query_status.QUERY_FAILED, e)
@@ -376,5 +387,15 @@ if __name__ == "__main__":
     db = DB_Controller()
     db.connect()
 
-    agent_data: (DB_query_status, Agent | str) = db.get_agent_data(6)
+    agent: Agent = Agent()
+    agent.container_id = "test"
+    agent.container_name = "a container"
+    agent.port_number = 1234
+    agent.start_time = datetime.now()
+
+    db.add_new_agent(agent)
+
+    agent_data: (DB_query_status, Agent | str) = db.get_agent_data(1)
+    print(agent_data)
+    agent_data = db.get_agent_data("test")
     print(agent_data)
