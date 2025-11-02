@@ -65,9 +65,11 @@ class DB_Controller:
     def __init__(
         self,
         db_name: str = DEFAULT_SQLITE3_DB_NAME,
+        in_memory_db: bool = False
     ):
         self._db_name: str = db_name
         self._con: sqlite3.Connection = None
+        self._in_memory_db: bool = in_memory_db
 
     # PUBLIC
 
@@ -83,16 +85,23 @@ class DB_Controller:
         """
         home_dir = os.path.expanduser("~")
 
-        # Create .ruby_poker directory to store database
-        Path(home_dir +
-             DEFAULT_SQLITE3_DB_DIR).mkdir(parents=True, exist_ok=True)
+        if self._in_memory_db:
+            try:
+                self._con = sqlite3.connect(":memory:")
+            except Exception as e:
+                print(f"DB connection error: {e}")
+                return DB_connect_status.H_FAIL
+        else:
+            # Create .ruby_poker directory to store database
+            Path(home_dir +
+                 DEFAULT_SQLITE3_DB_DIR).mkdir(parents=True, exist_ok=True)
 
-        try:
-            self._con = sqlite3.connect(
-                home_dir + DEFAULT_SQLITE3_DB_DIR + self._db_name)
-        except Exception as e:
-            print(f"DB connection error: {e}")
-            return DB_connect_status.H_FAIL
+            try:
+                self._con = sqlite3.connect(
+                    home_dir + DEFAULT_SQLITE3_DB_DIR + self._db_name)
+            except Exception as e:
+                print(f"DB connection error: {e}")
+                return DB_connect_status.H_FAIL
 
         init: (DB_initialize_status, None | str) = self._initialize_db()
 
@@ -541,21 +550,25 @@ class DB_Controller:
 
 
 if __name__ == "__main__":
-    db = DB_Controller()
+    db = DB_Controller(in_memory_db=True)
     db.connect()
+
+    agent: Agent = Agent()
+    agent.container_id = "test"
+    agent.container_name = "a container"
+    agent.port_number = 1234
+    agent.start_time = datetime.now()
+
+    print(db.add_new_agent(agent))
+
+    agent_data: (DB_query_status, Agent | str) = db.get_agent_data(1)
+    print(agent_data)
+    agent_data = db.get_agent_data("test")
+    print(agent_data)
+
     print(db.update_agent_data(
         "test", {"team_members": "Ruby Engelhart, Tom",
                  "team_name": "Peaches", "active": 1, "port_number": 5432}))
 
-    # agent: Agent = Agent()
-    # agent.container_id = "test"
-    # agent.container_name = "a container"
-    # agent.port_number = 1234
-    # agent.start_time = datetime.now()
-
-    # print(db.add_new_agent(agent))
-
-    # agent_data: (DB_query_status, Agent | str) = db.get_agent_data(1)
-    # print(agent_data)
-    # agent_data = db.get_agent_data("test")
-    # print(agent_data)
+    agent_data = db.get_agent_data("test")
+    print(agent_data)
