@@ -331,34 +331,34 @@ class DB_Controller:
             DB_query_status, None | str):
         """
         Updates an agents data under the agent table.
-        Can be queried by either id, or container_id.
-        If agent_id is of type int, it is queried by id.
-        If agent_id is of type str, it is queried by container_id.
+        Can be queried by either `id`, or `container_id`.
+        If `agent_id` is of type `int`, it is queried by `id`.
+        If `agent_id` is of type `str`, it is queried by `container_id`.
 
-        @return a tuple, with the first index always being DB_query_status,
-        and the second index either being None, or an
+        @return a tuple, with the first index always being `DB_query_status`,
+        and the second index either being `None`, or an
         error message depening.
 
         Potential return structures:
-        (DB_query_status.SUCCESS, None):
+        `(DB_query_status.SUCCESS, None)`:
             Query suceeded.
             It is returned with an Agent dataclass
 
-        (DB_query_status.SQLITE3_NOT_CONNECT, None):
+        `(DB_query_status.SQLITE3_NOT_CONNECT, None)`:
             connection object does not exist
 
-        (DB_query_status.NOT_A_SQLITE_CONNECTION_OBJ, None):
+        `(DB_query_status.NOT_A_SQLITE_CONNECTION_OBJ, None)`:
             expected connection object, got something else
 
-        (DB_query_stats.MISSING PARAM, str):
+        `(DB_query_stats.MISSING PARAM, str)`:
             Missing a necessary parameter.
             It is returned with a str stating what param is missing.
 
-        (DB_query_status.BAD_PARAM_TYPE, str):
+        `(DB_query_status.BAD_PARAM_TYPE, str)`:
             Param has unexpected type.
             It is returned with a str stating unexpected param type.
 
-        (DB_query_status.QUERY_FAILED, str):
+        `(DB_query_status.QUERY_FAILED, str)`:
             Query failed for some reason.
             It is returned wiht a str stating query error.
         """
@@ -380,8 +380,15 @@ class DB_Controller:
                     f" {type(data)}")
 
         cur: sqlite3.Cursor = self._con.cursor()
+
+        # The string to be executed. Built on top of.
         query_str: str = "UPDATE agents SET "
+
+        # Part of query_str; What the query is matching on (container_id | id)
         match_str: str
+
+        # The amount of columns we are updating in a row
+        # Needed for comma formatting during SET
         update_count: int = 0
 
         match agent_id:
