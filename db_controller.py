@@ -121,8 +121,40 @@ class DB_Controller:
             return DB_connect_status.OK
 
     def add_new_agent(self, new_agent: Agent) -> (
-            DB_new_agent_status, str | None):
+            DB_new_agent_status, str | int | None):
+        """
+        Adds a new agent to the agent table. Requires Agent object.
 
+        Checks for strict typing and expected attributes.
+
+        @return a tuple, where the first index is the enum DB_new_agent_status,
+        and the secont index is either None, an error message, or the id of
+        the agent.
+
+        Potential return structures:
+        (DB_new_agent_status.SUBMITTED, int):
+            Sucessfuly submitted new agent. Is returned with an int
+            referencing, its id in the agents table.
+
+        (DB_new_agent_status.SQLITE3_NOT_CONNECT, None):
+            Connection object does not exist
+
+        (DB_new_agent_status.NOT_A_SQLITE_CONNECTION_OBJ, None):
+            Expected connection object, got something else
+
+        (DB_new_agent_status.MISSING_ATTRIBUTE, str):
+            There is a missing attribute. Is returned with a str
+            with a message referring to the attribute missing.
+
+        (DB_new_agent_status.BAD_ATTRIBUTE_TYPE, str):
+            An Agent attribute was the wrong type. Is returned with
+            a str with a message referring to the attribute with the
+            wrone type.
+
+        (DB_new_agent_status.FAILED_EXECUTION, str):
+            Adding an agent to the agents table failed. Is returned with
+            str with a message as to what failed.
+        """
         if self._con is None:
             return (DB_new_agent_status.SQLITE3_NOT_CONNECT, None)
 
@@ -295,6 +327,78 @@ class DB_Controller:
             case _: return (DB_query_status.TOO_MANY_RESULTS,
                             None)
 
+    def update_agent_data(self, agent_id: int | str, data: dict):
+        if self._con is None:
+            return (DB_query_status.SQLITE3_NOT_CONNECT, None)
+
+        if not isinstance(self._con, sqlite3.Connection):
+            return (DB_query_status.NOT_A_SQLITE_CONNECTION_OBJ, None)
+
+        if agent_id is None:
+            return (DB_query_status.MISSING_PARAM, "missing agent_id")
+
+        if data is None:
+            return (DB_query_status.MISSING_PARAM, "missing data")
+
+        if not isinstance(data, dict):
+            return (DB_query_status.BAD_PARAM_TYPE,
+                    "bad 'data' type, expected dict but got:"
+                    f" {type(data)}")
+
+        cur: sqlite3.Cursor = self._con.cursor()
+        query_str: str = "UPDATE agents SET "
+        match_str: str
+        update_count: int = 0
+
+        match agent_id:
+            case str():
+                match_str = f"WHERE container_id='{agent_id}'"
+            case int():
+                match_str = f"WHERE id={agent_id}"
+            case _:
+                return (DB_query_status.BAD_PARAM_TYPE,
+                        "bad 'agent_id' type, expected (int | str) but got: "
+                        f"{type(agent_id)}")
+
+        for k, v in data.items():
+            if update_count >= 1 and update_count != len(data):
+                query_str += ", "
+            match k:
+                case "team_members":
+                    query_str += f"team_members='{v}'"
+                case "team_name":
+                    query_str += f"team_name='{v}'"
+                case "active":
+                    query_str += f"active={v}"
+                case "port_number":
+                    query_str += f"port_number={v}"
+                case _:
+                    return (DB_query_status.BAD_PARAM_TYPE,
+                            f"Bad 'data', unexpected key. Got '{k} : {v}'")
+            update_count += 1
+
+        query_str += f" {match_str};"
+
+        try:
+            cur.execute(query_str)
+        except Exception as e:
+            self._con.rollback()
+            return (DB_query_status.QUERY_FAILED, e)
+
+        cur.close()
+        match cur.rowcount:
+            case 0:
+                self._con.rollback()
+                return (DB_query_status.QUERY_FAILED,
+                        "Failed to update. Most likely caused by the agent "
+                        f"'{agent_id}' not existing in the agents table.")
+            case 1:
+                self._con.commit()
+                return (DB_query_status.SUCCESS, None)
+
+    def agent_to_json(self, agent: Agent) -> str:
+        pass
+
     def get_db_name(self) -> str:
         return self._db_name
 
@@ -360,6 +464,18 @@ class DB_Controller:
         return (DB_initialize_status.READY, last_id)
 
     def _parse_agent_data(self, data: tuple) -> Agent:
+        """
+        Parses the return from querying the agents table for an agent into
+        an Agent object.
+
+        Does not have strict typing.
+
+        @returns the Agent object.
+
+        Can return an empty agent for two reasons:
+            1) data is not of type tuple
+            2) len of data is not 8
+        """
         agent: Agent = Agent()
 
         if type(data) is not tuple:
@@ -386,16 +502,19 @@ class DB_Controller:
 if __name__ == "__main__":
     db = DB_Controller()
     db.connect()
+    print(db.update_agent_data(
+        "test", {"team_members": "Ruby Engelhart, Tom",
+                 "team_name": "Peaches", "active": 1, "port_number": 5432}))
 
-    agent: Agent = Agent()
-    agent.container_id = "test"
-    agent.container_name = "a container"
-    agent.port_number = 1234
-    agent.start_time = datetime.now()
+    # agent: Agent = Agent()
+    # agent.container_id = "test"
+    # agent.container_name = "a container"
+    # agent.port_number = 1234
+    # agent.start_time = datetime.now()
 
-    db.add_new_agent(agent)
+    # print(db.add_new_agent(agent))
 
-    agent_data: (DB_query_status, Agent | str) = db.get_agent_data(1)
-    print(agent_data)
-    agent_data = db.get_agent_data("test")
-    print(agent_data)
+    # agent_data: (DB_query_status, Agent | str) = db.get_agent_data(1)
+    # print(agent_data)
+    # agent_data = db.get_agent_data("test")
+    # print(agent_data)
