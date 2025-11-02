@@ -280,11 +280,9 @@ class DB_Controller:
             case 0: return (DB_query_status.NO_RESULT,
                             None)
             case 1: return (DB_query_status.SUCCESS,
-                            self._parse_agent_data(data))
+                            self._parse_agent_data(data[0]))
             case _: return (DB_query_status.TOO_MANY_RESULTS,
                             None)
-
-        return (DB_query_status.SUCCESS, agent_data)
 
     def get_db_name(self) -> str:
         return self._db_name
@@ -350,16 +348,27 @@ class DB_Controller:
         cur.close()
         return (DB_initialize_status.READY, last_id)
 
-    def _parse_agent_data(self, data: list) -> Agent:
-        # TODO: Test data is correct format first...
+    def _parse_agent_data(self, data: tuple) -> Agent:
         agent: Agent = Agent()
-        agent.container_name = data[0][1]
-        agent.container_id = data[0][2]
-        agent.start_time = data[0][3]
-        agent.team_name = data[0][4]
-        agent.team_members = data[0][5]
-        agent.port_number = data[0][6]
-        agent.active = data[0][7]
+
+        if type(data) is not tuple:
+            print("Failed to parse Agent data."
+                  f"Expected data to be of type tuple, but got {type(data)}.")
+            return agent
+
+        if len(data) != 8:
+            print("Failed to parse Agent data."
+                  f"Expect len of 8, got {len(data)}.")
+            return agent
+
+        agent.id = data[0]
+        agent.container_name = data[1]
+        agent.container_id = data[2]
+        agent.start_time = data[3]
+        agent.team_name = data[4]
+        agent.team_members = data[5]
+        agent.port_number = data[6]
+        agent.active = data[7]
         return agent
 
 
