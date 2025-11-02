@@ -327,7 +327,41 @@ class DB_Controller:
             case _: return (DB_query_status.TOO_MANY_RESULTS,
                             None)
 
-    def update_agent_data(self, agent_id: int | str, data: dict):
+    def update_agent_data(self, agent_id: int | str, data: dict) -> (
+            DB_query_status, None | str):
+        """
+        Updates an agents data under the agent table.
+        Can be queried by either id, or container_id.
+        If agent_id is of type int, it is queried by id.
+        If agent_id is of type str, it is queried by container_id.
+
+        @return a tuple, with the first index always being DB_query_status,
+        and the second index either being None, or an
+        error message depening.
+
+        Potential return structures:
+        (DB_query_status.SUCCESS, None):
+            Query suceeded.
+            It is returned with an Agent dataclass
+
+        (DB_query_status.SQLITE3_NOT_CONNECT, None):
+            connection object does not exist
+
+        (DB_query_status.NOT_A_SQLITE_CONNECTION_OBJ, None):
+            expected connection object, got something else
+
+        (DB_query_stats.MISSING PARAM, str):
+            Missing a necessary parameter.
+            It is returned with a str stating what param is missing.
+
+        (DB_query_status.BAD_PARAM_TYPE, str):
+            Param has unexpected type.
+            It is returned with a str stating unexpected param type.
+
+        (DB_query_status.QUERY_FAILED, str):
+            Query failed for some reason.
+            It is returned wiht a str stating query error.
+        """
         if self._con is None:
             return (DB_query_status.SQLITE3_NOT_CONNECT, None)
 
