@@ -3,11 +3,21 @@ import json
 import docker
 from fastapi import FastAPI
 from pydantic import BaseModel
+import uvicorn
+from dotenv import load_dotenv
+import os
 
-from docker_controller import AgentController, DC_SC
+from roker.controllers.docker_controller import AgentController, DC_SC
+from roker.controllers.db_controller import DB_Controller
+load_dotenv()
 
 app = FastAPI()
 ac = AgentController()
+db = DB_Controller()
+db.connect()
+
+PORT_NUMBER = int(os.getenv("PORT_NUMBER")) or 8000
+API_RELOAD = os.getenv("API_RELOAD") or True
 
 
 class AddAgentReq(BaseModel):
@@ -131,3 +141,8 @@ def command(req: CommandReq) -> str:
     container.reload()
     print(container.status)
     return json.dumps({"ok": "ok"})
+
+
+def start():
+    uvicorn.run("roker.api.main:app", host="0.0.0.0",
+                port=PORT_NUMBER, reload=API_RELOAD)

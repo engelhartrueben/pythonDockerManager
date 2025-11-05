@@ -1,8 +1,9 @@
 from enum import IntEnum
 from dataclasses import dataclass
 from time import sleep
-from port_controller import PortController, PortAssignment
 import docker
+
+from roker.controllers.port_controller import PortController, PortAssignment
 
 
 class DC_SC(IntEnum):

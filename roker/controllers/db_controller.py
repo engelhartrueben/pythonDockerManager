@@ -9,7 +9,7 @@ from pathlib import Path
 
 load_dotenv()
 
-DEFAULT_SQLITE3_DB_DIR = "/.ruby_poker/"
+DEFAULT_SQLITE3_DB_DIR = "/.roker/"
 DEFAULT_SQLITE3_DB_NAME = "database.db"
 
 
@@ -21,8 +21,8 @@ class Agent:
     start_time: datetime = None
     team_name: str = None
     team_members: str = None
-    port_number: int = -1
-    active: bool = -1
+    port_number: int = None
+    active: bool = False
 
 
 # https://docs.python.org/3/library/sqlite3.html#sqlite3.threadsafety
@@ -64,12 +64,15 @@ class DB_connect_status(IntEnum):
 class DB_Controller:
     def __init__(
         self,
-        db_name: str = DEFAULT_SQLITE3_DB_NAME,
-        in_memory_db: bool = False
+        db_name: str = os.getenv("SQLITE_DB_NAME", DEFAULT_SQLITE3_DB_NAME),
+        db_dir: str = os.getenv("SQLITE_DB_DIR", DEFAULT_SQLITE3_DB_DIR),
+        in_memory_db: bool = os.getenv("SQLITE3_IN_MEMORY") == 'True'
     ):
         self._db_name: str = db_name
+        self._db_dir: str = db_dir
         self._con: sqlite3.Connection = None
         self._in_memory_db: bool = in_memory_db
+        print(self._in_memory_db)
 
     # PUBLIC
 
@@ -83,7 +86,6 @@ class DB_Controller:
         @return: DB_connect_status
             DB_connect_status.H_FAIL is a program terminating failure
         """
-        home_dir = os.path.expanduser("~")
 
         if self._in_memory_db:
             try:
@@ -91,17 +93,20 @@ class DB_Controller:
             except Exception as e:
                 print(f"DB connection error: {e}")
                 return DB_connect_status.H_FAIL
+            print("Starting db in memory")
         else:
+            home_dir = os.path.expanduser("~")
             # Create .ruby_poker directory to store database
             Path(home_dir +
-                 DEFAULT_SQLITE3_DB_DIR).mkdir(parents=True, exist_ok=True)
+                 self._db_dir).mkdir(parents=True, exist_ok=True)
 
             try:
                 self._con = sqlite3.connect(
-                    home_dir + DEFAULT_SQLITE3_DB_DIR + self._db_name)
+                    home_dir + self._db_dir + self._db_name)
             except Exception as e:
                 print(f"DB connection error: {e}")
                 return DB_connect_status.H_FAIL
+            print(f"Starting db in {home_dir}{self._db_dir}{self._db_name}")
 
         init: (DB_initialize_status, None | str) = self._initialize_db()
 
@@ -213,7 +218,7 @@ class DB_Controller:
                   f"Got: {new_agent.team_name}")
             new_agent.team_name = ""
 
-        if new_agent.active != -1:
+        if new_agent.active:
             print("active is populated when it shouldn't be."
                   f"Got: {new_agent.active}")
 
@@ -380,7 +385,7 @@ class DB_Controller:
         if agent_id is None:
             return (DB_query_status.MISSING_PARAM, "missing agent_id")
 
-        if data is None:
+        if data is None or len(data) == 0:
             return (DB_query_status.MISSING_PARAM, "missing data")
 
         if not isinstance(data, dict):
