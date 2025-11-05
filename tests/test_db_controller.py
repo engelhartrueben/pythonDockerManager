@@ -318,7 +318,13 @@ class Test_DB_controller:
         assert get_status == d.DB_query_status.SUCCESS
         assert get_body.port_number == 5678
 
-    def test_update_agent_data_mult(self):
+    def test_update_agent_data_mult_w_int_id(self):
+        """
+        ROW ID TEST
+
+        Tests DB_Controller.update_agent_data updates multiple
+        fields with the row id.
+        """
         db = d.DB_Controller(in_memory_db=True)
         assert db.connect() == d.DB_connect_status.OK
 
@@ -352,7 +358,50 @@ class Test_DB_controller:
         assert get_body.active
         assert get_body.port_number == 5678
 
+    def test_update_agent_data_mult_w_str_id(self):
+        """
+        CONTAINER ID TEST
+
+        Tests DB_Controller.update_agent_data updates multiple
+        fields with the container id.
+        """
+        db = d.DB_Controller(in_memory_db=True)
+        assert db.connect() == d.DB_connect_status.OK
+
+        db.add_new_agent(agent_1)
+
+        # Assert default input
+        (get_status, get_body) = db.get_agent_data("test id 1")
+        assert get_status == d.DB_query_status.SUCCESS
+
+        assert get_body.team_members is None
+        assert get_body.team_name is None
+        assert not get_body.active
+        assert get_body.port_number == agent_1.port_number
+
+        # Upate
+        (res_status, res_body) = db.update_agent_data("test id 1", {
+            "team_members": "test members",
+            "team_name": "test name",
+            "active": True,
+            "port_number": 5678
+        })
+        assert res_status == d.DB_query_status.SUCCESS
+        assert res_body is None
+
+        # Assert port_number has been updated
+        (get_status, get_body) = db.get_agent_data("test id 1")
+        assert get_status == d.DB_query_status.SUCCESS
+        assert get_body.team_members == "test members"
+        assert get_body.team_name == "test name"
+        assert get_body.active
+        assert get_body.port_number == 5678
+
     def test_update_agent_data_extra_failure(self):
+        """
+        Ensures DB_Controller.update_agent_data fails when passed
+        additional entries into the data dict.
+        """
         db = d.DB_Controller(in_memory_db=True)
         assert db.connect() == d.DB_connect_status.OK
 
@@ -376,6 +425,10 @@ class Test_DB_controller:
                             " 'extra_attribute : test'")
 
     def test_update_agent_data_no_param_failure(self):
+        """
+        Ensures DB_Controller.update_agent_data fails appropriately when
+        not given the proper parameters.
+        """
         db = d.DB_Controller(in_memory_db=True)
         assert db.connect() == d.DB_connect_status.OK
 
@@ -388,6 +441,10 @@ class Test_DB_controller:
         assert res_status == d.DB_query_status.MISSING_PARAM
 
     def test_update_agent_data_wrong_id(self):
+        """
+        Ensures DB_Controller.update_agent_data fails appropriately when
+        given a bad (non existent) id.
+        """
         db = d.DB_Controller(in_memory_db=True)
         assert db.connect() == d.DB_connect_status.OK
 
