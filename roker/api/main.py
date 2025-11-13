@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import os
 
 from roker.controllers.docker_controller import AgentController, DC_SC
-from roker.controllers.db_controller import DB_Controller
+from roker.controllers.db_controller import DB_Controller, Agent
 load_dotenv()
 
 app = FastAPI()
@@ -48,7 +48,15 @@ async def add_agent(req: AddAgentReq) -> str:
     if task.status != DC_SC.OK:
         return json.dumps({"status": "bad"})
 
-    print(task)
+    new_agent: Agent = Agent(
+        container_id=task.container_id,
+        container_name=task.container_name,
+        start_time=task.start_time,
+        port_number=task.port_number
+    )
+
+    db.add_new_agent(new_agent)
+
     return json.dumps({
         "port": task.port,
         "status": "ok",
@@ -127,7 +135,7 @@ def get_conatiner_logs(req: GetLogsReq) -> str:
 @app.post("/restart_agent")
 def restart_agent() -> str:
     """
-    Will eventually restart a docker container given a 
+    Will eventually restart a docker container given a
     container id.
     """
     ac.restart_conatiner("")

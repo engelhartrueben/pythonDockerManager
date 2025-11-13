@@ -1,6 +1,7 @@
 from enum import IntEnum
 from dataclasses import dataclass
 from time import sleep
+from datetime import datetime
 import docker
 
 from roker.controllers.port_controller import PortController, PortAssignment
@@ -26,6 +27,8 @@ class ContainerCreation:
     status: DC_SC
     port: int = -1
     container_id: str = ""
+    container_name: str = ""
+    start_time: datetime
 
 
 class AgentController:
@@ -68,7 +71,8 @@ class AgentController:
         return ContainerCreation(
             status=DC_SC.OK,
             port=port_task.port,
-            container_id=res.id
+            container_id=res.id,
+            start_time=datetime.now()
         )
 
     def get_active_containers(self) -> {ActiveContainer}:

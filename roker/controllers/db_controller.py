@@ -72,7 +72,6 @@ class DB_Controller:
         self._db_dir: str = db_dir
         self._con: sqlite3.Connection = None
         self._in_memory_db: bool = in_memory_db
-        print(self._in_memory_db)
 
     # PUBLIC
 
