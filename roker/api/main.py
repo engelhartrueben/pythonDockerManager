@@ -16,8 +16,8 @@ ac = AgentController()
 db = DB_Controller()
 db.connect()
 
-PORT_NUMBER = int(os.getenv("PORT_NUMBER")) or 8000
-API_RELOAD = os.getenv("API_RELOAD") or True
+PORT_NUMBER = int(os.getenv("PORT_NUMBER", 8000))
+API_RELOAD = bool(os.getenv("API_RELOAD", True))
 
 
 class AddAgentReq(BaseModel):
